@@ -1,0 +1,13 @@
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+venv/
+node_modules/
+.git/
+.gitignore
+.env
+agent-prompt.md
+package.json
+package-lock.json
