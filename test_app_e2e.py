@@ -34,6 +34,12 @@ def test_health_check_endpoint(client):
     assert res.get_json()["status"] == "healthy"
 
 
+def test_favicon_endpoint(client):
+    res = client.get("/favicon.ico")
+    assert res.status_code == 200
+    assert b"#d97757" in res.data
+
+
 def test_api_info_unsupported_domain(client):
     res = client.post("/api/info", json={"url": "https://vimeo.com/123456"})
     assert res.status_code == 400

@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Clip Saver - Media Downloader &amp; Cropper</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
   <style>
     /* Typography declarations — Anthropic Serif & Anthropic Sans per DESIGN.md */
     @font-face {
@@ -1111,6 +1112,12 @@
         box-shadow: 4px 0 24px rgba(0, 0, 0, 0.1);
       }
 
+      body.mobile-sidebar-open {
+        overflow: hidden;
+        height: 100vh;
+        touch-action: none;
+      }
+
       body.mobile-sidebar-open .app-sidebar {
         transform: translateX(0);
       }
@@ -1603,6 +1610,11 @@
 
     function toggleMobileSidebar(open) {
       document.body.classList.toggle('mobile-sidebar-open', open);
+      if (open) {
+        document.body.style.overflow = 'hidden';
+      } else {
+        document.body.style.overflow = '';
+      }
     }
 
     function switchPage(pageKey) {

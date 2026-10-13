@@ -440,6 +440,11 @@ def health():
     return jsonify({"status": "healthy"}), 200
 
 
+@app.route("/favicon.ico")
+def favicon():
+    return app.send_static_file("favicon.svg")
+
+
 @app.route("/api/info", methods=["POST"])
 @limiter.limit("10 per minute")
 def get_info():
