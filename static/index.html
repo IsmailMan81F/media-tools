@@ -91,7 +91,7 @@
       --font-sans: var(--font-anthropic-sans);
 
       --sidebar-width: 250px;
-      --sidebar-collapsed-width: 68px;
+      --sidebar-collapsed-width: 64px;
     }
 
     *, *::before, *::after {
@@ -154,12 +154,17 @@
     }
 
     .sidebar-header {
-      padding: 20px 16px;
+      padding: 16px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       border-bottom: 1px solid var(--color-chalk);
       min-height: 65px;
+    }
+
+    body.sidebar-collapsed .sidebar-header {
+      padding: 16px 0;
+      justify-content: center;
     }
 
     .sidebar-brand {
@@ -172,7 +177,13 @@
       font-weight: 500;
       white-space: nowrap;
       overflow: hidden;
-      transition: opacity 0.2s ease;
+      cursor: pointer;
+    }
+
+    body.sidebar-collapsed .sidebar-brand {
+      justify-content: center;
+      width: 100%;
+      margin: 0;
     }
 
     .brand-mark {
@@ -181,6 +192,15 @@
       border-radius: 50%;
       background-color: var(--color-clay);
       flex-shrink: 0;
+      transition: transform 0.2s ease;
+    }
+
+    body.sidebar-collapsed .brand-mark {
+      cursor: pointer;
+    }
+
+    body.sidebar-collapsed .brand-mark:hover {
+      transform: scale(1.35);
     }
 
     .brand-text {
@@ -188,9 +208,7 @@
     }
 
     body.sidebar-collapsed .brand-text {
-      opacity: 0;
-      width: 0;
-      pointer-events: none;
+      display: none;
     }
 
     .sidebar-toggle-btn {
@@ -211,6 +229,10 @@
       color: var(--color-carbon);
     }
 
+    body.sidebar-collapsed .sidebar-toggle-btn {
+      display: none;
+    }
+
     .sidebar-nav {
       flex: 1;
       padding: 16px 10px;
@@ -219,11 +241,18 @@
       gap: 6px;
     }
 
+    body.sidebar-collapsed .sidebar-nav {
+      padding: 16px 0;
+      align-items: center;
+      gap: 8px;
+    }
+
     .nav-item {
       display: flex;
       align-items: center;
       gap: 12px;
-      padding: 10px 12px;
+      padding: 10px 14px;
+      height: 44px;
       border-radius: 8px;
       background: transparent;
       border: 1px solid transparent;
@@ -235,7 +264,7 @@
       cursor: pointer;
       white-space: nowrap;
       width: 100%;
-      transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+      transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, width 0.2s ease;
     }
 
     .nav-item:hover {
@@ -251,25 +280,36 @@
     }
 
     .nav-icon {
-      width: 18px;
-      height: 18px;
+      width: 20px;
+      height: 20px;
       color: currentColor;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
     .nav-label {
       transition: opacity 0.2s ease, width 0.2s ease;
     }
 
-    body.sidebar-collapsed .nav-label {
-      opacity: 0;
-      width: 0;
-      overflow: hidden;
-      pointer-events: none;
+    body.sidebar-collapsed .nav-item {
+      width: 44px;
+      height: 44px;
+      margin: 0 auto;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
     }
 
-    body.sidebar-collapsed .nav-item {
-      justify-content: center;
-      padding: 10px 0;
+    body.sidebar-collapsed .nav-icon {
+      margin: 0;
+    }
+
+    body.sidebar-collapsed .nav-label {
+      display: none;
     }
 
     .sidebar-footer {
@@ -280,17 +320,8 @@
       justify-content: center;
     }
 
-    .sidebar-footer-text {
-      font-size: 11px;
-      color: var(--color-ashen);
-      white-space: nowrap;
-      transition: opacity 0.2s ease;
-    }
-
-    body.sidebar-collapsed .sidebar-footer-text {
-      opacity: 0;
-      width: 0;
-      overflow: hidden;
+    body.sidebar-collapsed .sidebar-footer {
+      display: none;
     }
 
     /* Mobile Backdrop */
@@ -1041,9 +1072,10 @@
 
     /* Footer */
     .footer-band {
-      background-color: var(--color-obsidian);
-      padding: 64px 24px;
+      background-color: transparent;
+      padding: 40px 24px 48px 24px;
       margin-top: auto;
+      border-top: 1px solid var(--color-chalk);
     }
 
     .footer-inner {
@@ -1051,15 +1083,15 @@
       margin: 0 auto;
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 8px;
       text-align: center;
     }
 
     .footer-notice {
-      color: var(--color-pebble);
-      font-size: 14px;
+      color: var(--color-ashen);
+      font-size: 13px;
       line-height: 1.6;
-      max-width: 700px;
+      max-width: 650px;
       margin: 0 auto;
     }
 
@@ -1138,10 +1170,10 @@
   <!-- Sidebar Navigation -->
   <aside id="app-sidebar" class="app-sidebar" aria-label="Application Navigation">
     <div class="sidebar-header">
-      <a href="/" class="sidebar-brand">
+      <div class="sidebar-brand" onclick="handleBrandClick()" title="Clip Saver">
         <span class="brand-mark" aria-hidden="true"></span>
         <span class="brand-text">Clip Saver</span>
-      </a>
+      </div>
       <button
         type="button"
         id="sidebar-toggle-btn"
@@ -1560,6 +1592,12 @@
         icon.innerHTML = '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m14 9 3 3-3 3"/>';
       } else {
         icon.innerHTML = '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m16 15-3-3 3-3"/>';
+      }
+    }
+
+    function handleBrandClick() {
+      if (document.body.classList.contains('sidebar-collapsed')) {
+        toggleSidebarCollapse();
       }
     }
 
