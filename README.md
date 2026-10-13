@@ -1,152 +1,340 @@
 # Clip Saver
 
-Clip Saver is a clean, reliable web application for saving videos and audio from YouTube (videos and Shorts), TikTok, Instagram, Facebook, and X (Twitter).
+Clip Saver is a clean, single-page video and audio downloader web application designed to save media from YouTube (standard videos and Shorts), TikTok, Instagram (Reels), Facebook, and X (formerly Twitter).
 
-The application is built with a lightweight Python/Flask backend utilizing `yt-dlp` and `ffmpeg`, and a frontend crafted in vanilla HTML, CSS, and JavaScript following the Warm Parchment design system.
-
----
-
-## Features
-
-- **Supported Platforms:** YouTube (Videos and Shorts), TikTok, Instagram Reels, Facebook, and X (Twitter).
-- **Quality Selector:** Automatically detects available video resolutions (e.g., 2160p 4K, 1440p 2K, 1080p HD, 720p, 480p, 360p) and MP3 audio extraction.
-- **Asynchronous Processing:** Downloads and streams are processed in background threads without blocking client requests.
-- **Real-Time Progress:** Polling progress indicator displaying current state (Queued, Downloading, Merging, Ready).
-- **Automatic Clean Downloads:** Files are named using the sanitized video title and delivered directly to the client browser.
-- **Security and Abuse Protection:**
-  - Whitelist domain enforcement with SSRF defense preventing access to private, loopback, or non-standard addresses.
-  - Per-IP rate limiting (10 requests per minute on `/api/info` and `/api/prepare`).
-  - Configurable duration caps, file size limits, and concurrent job thresholds.
-  - Automatic cleanup of temporary files upon download completion and through a 15-minute TTL background daemon.
-- **Self-Contained Interface:**
-  - Self-hosted fonts (`Inter` and `Source Serif 4`).
-  - Monochromatic SVG icons from `lucide-static`.
-  - Zero external CDN dependencies.
+The project is built on the Warm Parchment design system: an editorial, print-inspired aesthetic featuring ink on bone paper, restrained typography, and a single chromatic accent of clay orange.
 
 ---
 
-## Local Development Setup
+## Table of Contents
 
-### Prerequisites
-
-- Python 3.12 or newer
-- FFmpeg installed and available on system PATH
-
-### Installation
-
-1. Clone or navigate to the repository directory:
-   ```bash
-   cd video-downloader
-   ```
-
-2. Create and activate a Python virtual environment:
-   ```bash
-   python -m venv venv
-   # On Linux/macOS:
-   source venv/bin/activate
-   # On Windows PowerShell:
-   .\venv\Scripts\Activate.ps1
-   ```
-
-3. Install Python dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. Run the development server:
-   ```bash
-   python app.py
-   ```
-
-5. Open `http://localhost:5000` in your browser.
+1. [Overview](#overview)
+2. [Key Capabilities](#key-capabilities)
+3. [Architecture and How It Works](#architecture-and-how-it-works)
+4. [Technology Stack](#technology-stack)
+5. [Design System & Interface](#design-system--interface)
+6. [Security & Abuse Prevention](#security--abuse-prevention)
+7. [Current Hosting Setup](#current-hosting-setup)
+8. [Manual Hosting Guide](#manual-hosting-guide)
+   - [Method 1: Local or Dedicated Server (Python)](#method-1-local-or-dedicated-server-python)
+   - [Method 2: Docker Container](#method-2-docker-container)
+   - [Method 3: Cloud Platforms (Render, Railway, Fly.io)](#method-3-cloud-platforms-render-railway-flyio)
+   - [Method 4: Exposing with Cloudflare Tunnel](#method-4-exposing-with-cloudflare-tunnel)
+9. [Maintenance & Troubleshooting](#maintenance--troubleshooting)
 
 ---
 
-## Running with Docker
+## Overview
 
-1. Build the Docker container image:
-   ```bash
-   docker build -t clip-saver .
-   ```
+Modern video streaming platforms restrict cross-origin access and do not expose static file URLs directly in the browser. A browser-only web application cannot download or merge these media streams due to Cross-Origin Resource Sharing (CORS) constraints and separate adaptive bitrate streams (DASH/HLS).
 
-2. Run the container:
-   ```bash
-   docker run -d -p 5000:5000 \
-     -e MAX_DURATION_SECONDS=3600 \
-     -e MAX_FILESIZE_MB=1500 \
-     -e MAX_CONCURRENT_JOBS=3 \
-     --name clip-saver-instance clip-saver
-   ```
-
-3. Access the service at `http://localhost:5000`.
+Clip Saver bridges this gap with a dedicated backend service that handles media stream extraction, download orchestration, and format transcoding using `yt-dlp` and `ffmpeg`, while providing a responsive, accessible interface with real-time progress tracking.
 
 ---
 
-## Deployment Instructions
+## Key Capabilities
 
-Clip Saver requires a hosting platform capable of running long-lived container processes and executing FFmpeg (such as Render, Railway, or Fly.io). Serverless runtimes (such as Vercel or AWS Lambda) are unsuitable due to execution timeouts and payload size limits during video download and merge operations.
+- **Multi-Platform Support:** Handles links from YouTube, TikTok, Instagram, Facebook, and X.
+- **Pre-Flight Metadata Inspection:** Extracts the video title, uploader name, duration, and thumbnail preview without downloading the media payload.
+- **Dynamic Quality Filtering:** Detects and displays only the resolutions that actually exist for the requested video (such as 2160p 4K, 1440p 2K, 1080p, 720p, 480p, 360p, or 240p).
+- **MP3 Audio Extraction:** Dedicated audio extraction option converting the stream to high-quality MP3 format.
+- **Asynchronous Background Processing:** Heavy download and transcoding operations run in dedicated background threads, keeping HTTP request lifecycles fast and non-blocking.
+- **Live Progress Updates:** Real-time polling updates the client with download percentage, processing state (Queued, Downloading, Merging, Ready), and human-readable status labels.
+- **Automated Delivery:** Automatically triggers a browser download with a sanitized, filesystem-safe filename matching the original title.
+- **Self-Healing Storage:** Downloaded files and job registries are immediately cleared after delivery, backed by a 15-minute background time-to-live (TTL) sweeper.
 
-### Deploying to Render
+---
 
-1. Create a new Web Service on Render connected to this repository (or deploy via Docker).
-2. Specify the Runtime as `Docker`.
-3. Set the Health Check Path to `/`.
-4. Configure Environment Variables:
+## Architecture and How It Works
+
+```
+[ User Browser ]
+       |
+       | 1. POST /api/info { url }
+       v
+[ Flask Backend ] ---> [ yt-dlp Metadata Extraction ]
+       |
+       | 2. Returns metadata and available qualities
+       v
+[ User Selects Quality & Clicks Download ]
+       |
+       | 3. POST /api/prepare { url, quality }
+       v
+[ Background Worker Thread ]
+       |---> Downloads video stream (yt-dlp)
+       |---> Downloads audio stream (yt-dlp)
+       |---> Merges streams with FFmpeg to MP4 (or extracts MP3)
+       |
+       | 4. GET /api/progress/<job_id> (Polled every 750ms)
+       v
+[ Worker Completes: State = "ready" ]
+       |
+       | 5. GET /api/file/<job_id> (Automatic download trigger)
+       v
+[ File Streamed to Browser ]
+       |
+       +---> Post-response hook deletes temporary disk directory
+```
+
+### Format Selection Logic
+- **Video:** The backend requests `bestvideo[height<=H]+bestaudio/best[height<=H]`, merged into an MP4 container with FFmpeg.
+- **Audio Only:** The backend extracts the highest quality audio stream (`bestaudio/best`) and converts it to MP3 at 192 kbps using the `FFmpegExtractAudio` post-processor.
+
+### Job Lifecycle and Cleanup
+1. Each download job receives a unique UUID4 identifier and an isolated directory in the system temp directory (`clip_saver_downloads/<job_id>`).
+2. When the user requests `/api/file/<job_id>`, the file is streamed as an attachment.
+3. A Flask `response.call_on_close` hook deletes the temporary folder and removes the job entry from memory once the response transmission finishes.
+4. If a client disconnects or abandons a download, an internal daemon thread running every 60 seconds purges any job directories older than 15 minutes (`JOB_TTL_SECONDS`).
+
+---
+
+## Technology Stack
+
+### Backend
+- **Python 3.12:** Core application runtime.
+- **Flask:** Lightweight WSGI framework serving API endpoints and static assets.
+- **Gunicorn:** Production WSGI HTTP server using `gthread` workers for high concurrent thread throughput.
+- **yt-dlp:** Video format extraction and media retrieval engine.
+- **FFmpeg:** Video stream multiplexing, audio stream merging, and audio transcoding.
+- **Flask-Limiter:** In-memory rate limiting based on remote client IP addresses.
+
+### Frontend
+- **HTML5 & Vanilla JavaScript:** Single-page application with zero external frameworks, libraries, or build steps.
+- **Inline CSS:** Complete styling self-contained within `index.html`.
+- **Self-Hosted Typography:**
+  - `Anthropic Serif` / `Source Serif 4` (Weight 400 for editorial headings).
+  - `Anthropic Sans` / `Inter` (Weights 400, 500, 600 for interface text and controls).
+- **Lucide Icons:** Monochromatic SVG assets inlined directly (`download`, `link`, `clipboard-paste`, `check`, `circle-alert`, `loader-circle`, `film`, `clock`, `user`, `x`).
+- **Zero CDNs:** The page makes zero external script, font, or stylesheet network calls.
+
+---
+
+## Design System & Interface
+
+The user interface follows the Warm Parchment specification:
+- **Palette:**
+  - Bone Parchment (`#f8f8f6`): Base canvas and navigation background.
+  - Paper White (`#ffffff`): Elevated main card surface.
+  - Soft Stone (`#efeeeb`): Nested video card and input bands.
+  - Carbon Ink (`#121212`): Primary text, headings, and primary button fills.
+  - Graphite (`#373734`): Secondary copy and interactive hover states.
+  - Ashen (`#7b7974`): Captions, timestamps, and helper text.
+  - Pebble (`#9c9a92`): Low-priority footer links and labels.
+  - Mist (`#b7b7b5`): Input borders and hairline dividers.
+  - Chalk (`#e7e6e1`): Card borders and unselected tile outlines.
+  - Obsidian (`#000000`): Footer surface only.
+  - Clay (`#d97757`): The single decorative accent (progress bar fill, brand dot mark).
+- **No Chromatic Colors:** No blue, green, or red colors are used. Success and error states are represented through monochromatic icons and warm-gray contextual badges.
+- **No Emojis:** The interface relies solely on SVG iconography.
+- **Accessibility:** Full keyboard navigation on quality tiles (radio semantics), explicit visible focus rings, and `aria-live="polite"` regions for progress notifications.
+
+---
+
+## Security & Abuse Prevention
+
+1. **Strict Whitelist Validation:** Only the following hosts and their subdomains are accepted:
+   - `youtube.com`
+   - `youtu.be`
+   - `tiktok.com`
+   - `instagram.com`
+   - `facebook.com`
+   - `fb.watch`
+   - `x.com`
+   - `twitter.com`
+2. **SSRF (Server-Side Request Forgery) Defense:**
+   - URLs must strictly use the `https` scheme.
+   - Non-standard network ports are rejected.
+   - Hostnames are resolved through DNS pre-flight checks. Any IP address belonging to private, loopback, link-local, multicast, or reserved ranges (such as `127.0.0.1`, `10.0.0.0/8`, `192.168.0.0/16`, `169.254.169.254`, `::1`) is immediately blocked.
+3. **Rate Limiting:**
+   - 10 requests per minute per IP address on `/api/info` and `/api/prepare`.
+4. **Configurable Server Caps:**
+   - `MAX_DURATION_SECONDS`: Prevents extraction of excessively long streams (default: 3600 seconds / 1 hour).
+   - `MAX_FILESIZE_MB`: Enforces an upper limit during stream download (default: 1500 MB).
+   - `MAX_CONCURRENT_JOBS`: Rejects additional downloads with HTTP 429 when the worker queue reaches capacity (default: 3 jobs).
+5. **Information Leakage Prevention:**
+   - Stack traces and internal exceptions are suppressed from client responses.
+
+---
+
+## Current Hosting Setup
+
+The application is currently running with the following active architecture:
+
+1. **Local Server Process:**
+   - Running locally on `http://127.0.0.1:5000` via the virtual environment.
+2. **Public Edge Tunnel (Cloudflare Tunnel):**
+   - Exposed to the internet via `cloudflared` over an encrypted QUIC tunnel.
+   - **Active Public URL:** [https://jets-uri-reggae-diversity.trycloudflare.com](https://jets-uri-reggae-diversity.trycloudflare.com)
+   - No public router port forwarding or firewall adjustments were required.
+
+---
+
+## Manual Hosting Guide
+
+### Method 1: Local or Dedicated Server (Python)
+
+#### 1. System Requirements
+- Python 3.12 or newer.
+- FFmpeg installed and available on system PATH.
+
+#### 2. Setup Steps
+
+```bash
+# 1. Clone or navigate to the project directory
+cd video-downloader
+
+# 2. Create and activate a virtual environment
+python -m venv venv
+
+# On Linux/macOS:
+source venv/bin/activate
+
+# On Windows PowerShell:
+.\venv\Scripts\Activate.ps1
+
+# 3. Install dependencies
+pip install -r requirements.txt
+
+# 4. Configure environment variables (optional)
+cp .env.example .env
+
+# 5. Run the application
+python app.py
+```
+
+On Linux or macOS in production, run with Gunicorn:
+```bash
+gunicorn -w 1 -k gthread --threads 4 -b 0.0.0.0:5000 app:app
+```
+
+---
+
+### Method 2: Docker Container
+
+The repository includes a multi-stage `Dockerfile` based on `python:3.12-slim` with FFmpeg installed.
+
+#### 1. Build the Docker Image
+```bash
+docker build -t clip-saver .
+```
+
+#### 2. Run the Container
+```bash
+docker run -d \
+  --name clip-saver-app \
+  -p 5000:5000 \
+  -e MAX_DURATION_SECONDS=3600 \
+  -e MAX_FILESIZE_MB=1500 \
+  -e MAX_CONCURRENT_JOBS=3 \
+  clip-saver
+```
+
+Access the app at `http://localhost:5000`.
+
+---
+
+### Method 3: Cloud Platforms (Render, Railway, Fly.io)
+
+Do **not** deploy this project to serverless functions (such as Vercel Functions or Netlify Functions) because video merging exceeds serverless duration and disk size constraints. Use a container runtime:
+
+#### Deploying to Render
+1. Push your repository to GitHub or GitLab.
+2. Log in to [Render](https://render.com) and click **New > Web Service**.
+3. Select your repository.
+4. Set **Runtime** to `Docker`.
+5. Set **Health Check Path** to `/`.
+6. Add Environment Variables:
    - `PORT`: `5000`
    - `MAX_DURATION_SECONDS`: `3600`
    - `MAX_FILESIZE_MB`: `1500`
    - `MAX_CONCURRENT_JOBS`: `3`
-   - `JOB_TTL_SECONDS`: `900`
-5. Click **Create Web Service**.
+7. Click **Create Web Service**.
 
-### Deploying to Railway
-
-1. Install the Railway CLI or link the repository from GitHub.
-2. Deploy the container using Railway:
+#### Deploying to Railway
+1. Install the Railway CLI: `npm install -g @railway/cli` or link through GitHub.
+2. Run in the project directory:
    ```bash
+   railway init
    railway up
    ```
-3. Set the environment variables in the Railway dashboard.
-4. Generate a public domain under service settings.
+3. In the Railway dashboard under service settings, click **Generate Domain** to get a public HTTPS URL.
 
-### Deploying to Fly.io
-
-1. Launch a new application:
+#### Deploying to Fly.io
+1. Install the Fly CLI: `flyctl`.
+2. Launch and deploy:
    ```bash
    fly launch --no-deploy
-   ```
-2. Deploy the app:
-   ```bash
    fly deploy
    ```
 
 ---
 
-## Maintenance: Updating yt-dlp
+### Method 4: Exposing with Cloudflare Tunnel
 
-Target platforms (YouTube, Instagram, TikTok) constantly alter their video players, anti-bot mechanisms, and delivery endpoints. To ensure uninterrupted operation:
+To make a local or self-hosted instance accessible over a public HTTPS URL:
 
-1. Update `yt-dlp` regularly:
+1. Download and install `cloudflared`:
+   - Windows: `winget install Cloudflare.cloudflared`
+   - Linux: `sudo apt install cloudflared` or download from Cloudflare releases.
+2. Start the Clip Saver server:
    ```bash
-   pip install -U yt-dlp
+   python app.py
    ```
-2. On container platforms, trigger a weekly rebuild or redeploy so the latest release of `yt-dlp` from PyPI is incorporated into the running image.
+3. In a separate terminal, launch the quick tunnel:
+   ```bash
+   cloudflared tunnel --url http://127.0.0.1:5000
+   ```
+4. Copy the resulting `https://*.trycloudflare.com` URL provided in the console output.
 
 ---
 
-## Known Platform Limitations & Datacenter IP Blocks
+## Maintenance & Troubleshooting
 
-Major video platforms (especially YouTube and Instagram) frequently block or throttle requests originating from commercial datacenter IP ranges (AWS, GCP, DigitalOcean, Render, Fly.io).
+### Regular `yt-dlp` Updates
+Video platforms frequently update their web players and video streaming signatures. When an extraction error begins occurring across supported platforms:
+```bash
+pip install -U yt-dlp
+```
+For Docker deployments, periodically rebuild the container image to retrieve the latest version from PyPI.
 
-If the deployed application encounters `Sign in to confirm you're not a bot` or `HTTP Error 429: Too Many Requests` while local requests succeed:
+### Handling Datacenter IP Blocks
+Target platforms (particularly YouTube and Instagram) frequently block or serve anti-bot challenges to requests originating from cloud hosting IP ranges (AWS, DigitalOcean, Render, GCP).
 
+If local downloads succeed but the deployed cloud service returns `Sign in to confirm you're not a bot`:
 1. **Residential Proxy:**
-   Configure a residential proxy in `yt-dlp` by passing the `--proxy` URL in `app.py` or via an environment variable `PROXY_URL`.
-2. **Authenticated Cookies:**
-   Export browser cookies from an authenticated session into a Netscape formatted cookie file and point `yt-dlp` to it using the `cookiefile` parameter. Store this file securely as an environment secret and never commit it to source control.
+   Set the `PROXY_URL` environment variable:
+   ```bash
+   export PROXY_URL="http://user:password@proxy-service.com:8080"
+   ```
+2. **Authenticated Session Cookies:**
+   Export cookies from an authenticated browser session into a Netscape formatted text file and specify the file path in `COOKIE_FILE`:
+   ```bash
+   export COOKIE_FILE="/path/to/cookies.txt"
+   ```
+   *Never commit cookie files to source control.*
 
 ---
 
-## License & Usage Notice
+## Project Structure
+
+```
+video-downloader/
+├── app.py                 # Core Flask application and download worker
+├── requirements.txt       # Python package dependencies
+├── Dockerfile             # Production container definition
+├── .dockerignore          # Container build exclusion rules
+├── .env.example           # Configuration template
+├── README.md              # Project documentation
+├── test_validation.py     # Unit tests for URL and input validation
+├── test_app_e2e.py        # End-to-end integration test suite
+└── static/
+    ├── index.html         # Single-page user interface
+    ├── fonts/             # Self-hosted Source Serif 4 and Inter fonts
+    └── icons/             # Monochromatic Lucide SVG icons
+```
+
+---
+
+## Usage Notice
 
 Only download videos you own or have permission to save. Respect each platform's terms of service and creator copyright.
