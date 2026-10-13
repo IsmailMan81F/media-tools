@@ -1,13 +1,16 @@
 import os
 import re
 import time
+import json
 import uuid
 import shutil
 import socket
 import tempfile
 import threading
 import ipaddress
+import subprocess
 import urllib.parse
+from werkzeug.utils import secure_filename
 from flask import Flask, request, jsonify, send_file, Response
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -49,6 +52,15 @@ limiter = Limiter(
 # In-memory job registry and lock
 jobs = {}
 jobs_lock = threading.Lock()
+
+# In-memory registry for uploaded media and cropped outputs
+crop_media = {}
+crop_results = {}
+crop_lock = threading.Lock()
+ALLOWED_UPLOAD_EXTS = {
+    "mp4", "webm", "mov", "m4v", "mkv", "avi",
+    "mp3", "wav", "m4a", "aac", "ogg", "flac"
+}
 
 ALLOWED_DOMAINS = {
     "youtube.com",
@@ -384,12 +396,29 @@ def cleanup_daemon():
                 if now - j_data.get("created_at", now) > JOB_TTL_SECONDS:
                     to_delete.append(j_id)
 
+        # Cleanup downloader jobs
         for j_id in to_delete:
             with jobs_lock:
                 j_data = jobs.pop(j_id, None)
             if j_data and j_data.get("dir") and os.path.isdir(j_data["dir"]):
                 try:
                     shutil.rmtree(j_data["dir"], ignore_errors=True)
+                except Exception:
+                    pass
+
+        # Cleanup cropper uploads and results
+        crop_to_delete = []
+        with crop_lock:
+            for c_id, c_data in list(crop_media.items()):
+                if now - c_data.get("created_at", now) > JOB_TTL_SECONDS:
+                    crop_to_delete.append(c_id)
+
+        for c_id in crop_to_delete:
+            with crop_lock:
+                c_data = crop_media.pop(c_id, None)
+            if c_data and c_data.get("dir") and os.path.isdir(c_data["dir"]):
+                try:
+                    shutil.rmtree(c_data["dir"], ignore_errors=True)
                 except Exception:
                     pass
 
@@ -550,6 +579,244 @@ def get_file(job_id):
         if job_dir and os.path.isdir(job_dir):
             try:
                 shutil.rmtree(job_dir, ignore_errors=True)
+            except Exception:
+                pass
+
+    response = send_file(
+        filepath,
+        as_attachment=True,
+        download_name=filename,
+        mimetype="application/octet-stream"
+    )
+    response.call_on_close(cleanup)
+    return response
+
+
+# ---------------- MEDIA CROPPER ENDPOINTS ----------------
+
+def get_media_mimetype(ext: str) -> str:
+    ext = ext.lower().lstrip(".")
+    mimes = {
+        "mp4": "video/mp4",
+        "webm": "video/webm",
+        "mov": "video/quicktime",
+        "m4v": "video/x-m4v",
+        "mkv": "video/x-matroska",
+        "avi": "video/x-msvideo",
+        "mp3": "audio/mpeg",
+        "wav": "audio/wav",
+        "m4a": "audio/mp4",
+        "aac": "audio/aac",
+        "ogg": "audio/ogg",
+        "flac": "audio/flac",
+    }
+    return mimes.get(ext, "application/octet-stream")
+
+
+def probe_media(filepath: str):
+    cmd = [
+        "ffprobe", "-v", "error",
+        "-show_entries", "format=duration,size:stream=codec_type,width,height",
+        "-of", "json", filepath
+    ]
+    res = subprocess.run(cmd, capture_output=True, text=True)
+    if res.returncode != 0:
+        raise ValueError("Unable to read media properties from file.")
+
+    data = json.loads(res.stdout or "{}")
+    duration = float(data.get("format", {}).get("duration", 0) or 0)
+    streams = data.get("streams", [])
+    is_video = any(s.get("codec_type") == "video" for s in streams)
+    width = next((s.get("width") for s in streams if s.get("width")), None)
+    height = next((s.get("height") for s in streams if s.get("height")), None)
+
+    return {
+        "duration": duration,
+        "is_video": is_video,
+        "width": width,
+        "height": height
+    }
+
+
+@app.route("/api/crop/upload", methods=["POST"])
+@limiter.limit("20 per minute")
+def crop_upload():
+    if "file" not in request.files:
+        return jsonify({"error": "No media file provided."}), 400
+
+    uploaded = request.files["file"]
+    if not uploaded.filename:
+        return jsonify({"error": "Empty filename."}), 400
+
+    filename = secure_filename(uploaded.filename)
+    if not filename or "." not in filename:
+        return jsonify({"error": "Invalid file name or missing extension."}), 400
+
+    ext = filename.rsplit(".", 1)[-1].lower()
+    if ext not in ALLOWED_UPLOAD_EXTS:
+        return jsonify({
+            "error": f"Unsupported format. Allowed: {', '.join(sorted(ALLOWED_UPLOAD_EXTS))}"
+        }), 400
+
+    file_id = str(uuid.uuid4())
+    crop_dir = os.path.join(BASE_DOWNLOAD_DIR, f"crop_{file_id}")
+    os.makedirs(crop_dir, exist_ok=True)
+
+    dest_path = os.path.join(crop_dir, f"input.{ext}")
+    uploaded.save(dest_path)
+
+    try:
+        meta = probe_media(dest_path)
+    except Exception as err:
+        shutil.rmtree(crop_dir, ignore_errors=True)
+        return jsonify({"error": "The uploaded file could not be decoded as valid audio or video."}), 400
+
+    duration = meta["duration"]
+    if duration <= 0:
+        shutil.rmtree(crop_dir, ignore_errors=True)
+        return jsonify({"error": "Media duration is invalid or zero."}), 400
+
+    with crop_lock:
+        crop_media[file_id] = {
+            "id": file_id,
+            "filename": filename,
+            "ext": ext,
+            "dir": crop_dir,
+            "filepath": dest_path,
+            "duration": duration,
+            "is_video": meta["is_video"],
+            "width": meta["width"],
+            "height": meta["height"],
+            "created_at": time.time(),
+        }
+
+    return jsonify({
+        "file_id": file_id,
+        "filename": filename,
+        "duration": duration,
+        "duration_formatted": format_duration(duration),
+        "is_video": meta["is_video"],
+        "preview_url": f"/api/crop/preview/{file_id}",
+    })
+
+
+@app.route("/api/crop/preview/<file_id>", methods=["GET"])
+def crop_preview(file_id):
+    with crop_lock:
+        item = crop_media.get(file_id)
+
+    if not item or not os.path.isfile(item.get("filepath", "")):
+        return jsonify({"error": "Media preview not found or expired."}), 404
+
+    mimetype = get_media_mimetype(item["ext"])
+    return send_file(item["filepath"], mimetype=mimetype, conditional=True)
+
+
+@app.route("/api/crop/process", methods=["POST"])
+@limiter.limit("15 per minute")
+def crop_process():
+    data = request.get_json(silent=True) or {}
+    file_id = str(data.get("file_id", "")).strip()
+    try:
+        start_time = max(float(data.get("start_time", 0)), 0.0)
+        end_time = float(data.get("end_time", 0))
+    except (ValueError, TypeError):
+        return jsonify({"error": "Invalid start or end timestamp."}), 400
+
+    with crop_lock:
+        item = crop_media.get(file_id)
+
+    if not item or not os.path.isfile(item.get("filepath", "")):
+        return jsonify({"error": "Original media session expired or not found."}), 404
+
+    duration = item["duration"]
+    if end_time <= start_time:
+        return jsonify({"error": "End time must be greater than start time."}), 400
+    if start_time >= duration:
+        return jsonify({"error": "Start time exceeds total media duration."}), 400
+
+    # Clamp end time to actual duration
+    end_time = min(end_time, duration)
+    clip_duration = end_time - start_time
+
+    crop_dir = item["dir"]
+    ext = item["ext"]
+    crop_id = str(uuid.uuid4())
+    output_filename = f"cropped_{crop_id}.{ext}"
+    output_path = os.path.join(crop_dir, output_filename)
+
+    # Step 1: Attempt fast stream-copy
+    cmd_copy = [
+        "ffmpeg", "-y",
+        "-ss", f"{start_time:.3f}",
+        "-t", f"{clip_duration:.3f}",
+        "-i", item["filepath"],
+        "-c", "copy",
+        output_path
+    ]
+    res = subprocess.run(cmd_copy, capture_output=True)
+
+    # Step 2: Fallback to re-encode if stream copy fails
+    if res.returncode != 0 or not os.path.isfile(output_path) or os.path.getsize(output_path) < 100:
+        if item["is_video"]:
+            cmd_reencode = [
+                "ffmpeg", "-y",
+                "-ss", f"{start_time:.3f}",
+                "-t", f"{clip_duration:.3f}",
+                "-i", item["filepath"],
+                "-c:v", "libx264", "-preset", "fast",
+                "-c:a", "aac",
+                output_path
+            ]
+        else:
+            cmd_reencode = [
+                "ffmpeg", "-y",
+                "-ss", f"{start_time:.3f}",
+                "-t", f"{clip_duration:.3f}",
+                "-i", item["filepath"],
+                output_path
+            ]
+        res_reencode = subprocess.run(cmd_reencode, capture_output=True)
+        if res_reencode.returncode != 0 or not os.path.isfile(output_path):
+            return jsonify({"error": "Failed to process media crop operation."}), 500
+
+    clean_export_name = sanitize_filename("cropped_" + item["filename"].rsplit(".", 1)[0], ext)
+
+    with crop_lock:
+        crop_results[crop_id] = {
+            "crop_id": crop_id,
+            "file_id": file_id,
+            "filepath": output_path,
+            "filename": clean_export_name,
+            "dir": crop_dir,
+            "created_at": time.time(),
+        }
+
+    return jsonify({
+        "crop_id": crop_id,
+        "filename": clean_export_name,
+        "download_url": f"/api/crop/download/{crop_id}"
+    })
+
+
+@app.route("/api/crop/download/<crop_id>", methods=["GET"])
+def crop_download(crop_id):
+    with crop_lock:
+        item = crop_results.get(crop_id)
+
+    if not item or not os.path.isfile(item.get("filepath", "")):
+        return jsonify({"error": "Cropped file expired or not found."}), 404
+
+    filepath = item["filepath"]
+    filename = item.get("filename") or "cropped_media.mp4"
+    crop_dir = item.get("dir")
+
+    def cleanup():
+        with crop_lock:
+            crop_results.pop(crop_id, None)
+        if crop_dir and os.path.isdir(crop_dir):
+            try:
+                shutil.rmtree(crop_dir, ignore_errors=True)
             except Exception:
                 pass
 
