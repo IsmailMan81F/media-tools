@@ -435,6 +435,11 @@ def index():
     return app.send_static_file("index.html")
 
 
+@app.route("/health")
+def health():
+    return jsonify({"status": "healthy"}), 200
+
+
 @app.route("/api/info", methods=["POST"])
 @limiter.limit("10 per minute")
 def get_info():

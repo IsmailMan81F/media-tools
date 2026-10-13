@@ -250,17 +250,29 @@ Access the app at `http://localhost:5000`.
 Do **not** deploy this project to serverless functions (such as Vercel Functions or Netlify Functions) because video merging exceeds serverless duration and disk size constraints. Use a container runtime:
 
 #### Deploying to Render
-1. Push your repository to GitHub or GitLab.
-2. Log in to [Render](https://render.com) and click **New > Web Service**.
-3. Select your repository.
+
+Render supports this application natively via Docker and provides full FFmpeg execution.
+
+##### Option A: 1-Click Blueprint (Recommended)
+This repository includes a pre-configured `render.yaml` Blueprint specification.
+1. Push this repository to GitHub or GitLab.
+2. In the [Render Dashboard](https://dashboard.render.com), click **New + > Blueprint**.
+3. Select this repository.
+4. Render automatically reads `render.yaml`, configures the Docker runtime, sets `/health` as the health check, and provisions the service.
+5. Click **Apply**.
+
+##### Option B: Manual Web Service
+1. In the [Render Dashboard](https://dashboard.render.com), click **New + > Web Service**.
+2. Connect your Git repository.
+3. Name your service (e.g., `clip-saver`).
 4. Set **Runtime** to `Docker`.
-5. Set **Health Check Path** to `/`.
-6. Add Environment Variables:
-   - `PORT`: `5000`
+5. Set **Health Check Path** to `/health` (or `/`).
+6. Under **Environment Variables**, configure:
    - `MAX_DURATION_SECONDS`: `3600`
    - `MAX_FILESIZE_MB`: `1500`
    - `MAX_CONCURRENT_JOBS`: `3`
-7. Click **Create Web Service**.
+   - `JOB_TTL_SECONDS`: `900`
+7. Click **Create Web Service**. Render will build the container, verify the health check, and assign a public `https://<service-name>.onrender.com` URL.
 
 #### Deploying to Railway
 1. Install the Railway CLI: `npm install -g @railway/cli` or link through GitHub.

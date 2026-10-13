@@ -28,6 +28,12 @@ def test_homepage_serves_html(client):
         assert not (0x1F300 <= cp <= 0x1FAFF or 0x2600 <= cp <= 0x27BF), f"Found emoji: {char}"
 
 
+def test_health_check_endpoint(client):
+    res = client.get("/health")
+    assert res.status_code == 200
+    assert res.get_json()["status"] == "healthy"
+
+
 def test_api_info_unsupported_domain(client):
     res = client.post("/api/info", json={"url": "https://vimeo.com/123456"})
     assert res.status_code == 400
