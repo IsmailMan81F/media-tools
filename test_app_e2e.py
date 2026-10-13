@@ -18,7 +18,9 @@ def test_homepage_serves_html(client):
     assert "Clip Saver" in html
     assert "Save any video, in the quality you choose" in html
     assert "/static/fonts/source-serif-4" in html
-    assert "/static/fonts/Geist" in html
+    assert "/static/fonts/inter" in html
+    assert "Anthropic Serif" in html
+    assert "Anthropic Sans" in html
     # Ensure no emojis in HTML
     for char in html:
         # Check high unicode surrogate/emoji ranges
