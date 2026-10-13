@@ -34,14 +34,26 @@ Clip Saver bridges this gap with a dedicated backend service that handles media 
 
 ## Key Capabilities
 
-- **Multi-Platform Support:** Handles links from YouTube, TikTok, Instagram, Facebook, and X.
-- **Pre-Flight Metadata Inspection:** Extracts the video title, uploader name, duration, and thumbnail preview without downloading the media payload.
-- **Dynamic Quality Filtering:** Detects and displays only the resolutions that actually exist for the requested video (such as 2160p 4K, 1440p 2K, 1080p, 720p, 480p, 360p, or 240p).
+### 1. Media Downloader
+- **Multi-Platform Support:** Handles links from YouTube (standard videos & Shorts), TikTok, Instagram (Reels), Facebook, and X.
+- **Pre-Flight Metadata Inspection:** Extracts video title, uploader name, duration, and thumbnail preview without downloading the media payload.
+- **Dynamic Quality Filtering:** Detects and displays only the resolutions that actually exist for the requested video (2160p 4K, 1440p 2K, 1080p, 720p, 480p, 360p, 240p).
 - **MP3 Audio Extraction:** Dedicated audio extraction option converting the stream to high-quality MP3 format.
-- **Asynchronous Background Processing:** Heavy download and transcoding operations run in dedicated background threads, keeping HTTP request lifecycles fast and non-blocking.
-- **Live Progress Updates:** Real-time polling updates the client with download percentage, processing state (Queued, Downloading, Merging, Ready), and human-readable status labels.
-- **Automated Delivery:** Automatically triggers a browser download with a sanitized, filesystem-safe filename matching the original title.
-- **Self-Healing Storage:** Downloaded files and job registries are immediately cleared after delivery, backed by a 15-minute background time-to-live (TTL) sweeper.
+- **Asynchronous Background Processing:** Heavy download and transcoding operations run in dedicated background threads.
+- **Live Progress Updates:** Real-time polling updates the client with download percentage and processing state.
+- **Automated Delivery:** Automatically triggers a browser download with a sanitized, filesystem-safe filename.
+
+### 2. Media Cropper & Trimmer
+- **Audio and Video Support:** Upload local media files (MP4, WebM, MOV, MKV, MP3, WAV, M4A, AAC, FLAC up to 500 MB).
+- **Embedded Media Preview:** Dedicated video player or audio wave preview with synchronized playback.
+- **Interactive Timeline & Boundaries:** Visual track with start and end markers (borns), position playhead, and fine-tuning timestamp controls.
+- **Fast Lossless Trimming:** Employs FFmpeg stream-copy with automated fallback to high-quality re-encoding.
+- **Range Previewing:** Built-in preview player auditioning the exact selected clip range before export.
+- **Instant Export:** Direct download of the cropped media file with automated temporary storage cleanup.
+
+### 3. Application Shell & Navigation
+- **Collapsible Desktop Sidebar:** Smooth sliding animation with an icon-only collapsed mode displaying navigation icons with tooltips.
+- **Responsive Mobile Drawer:** Top-bar hamburger menu with animated slide-in drawer and overlay backdrop for mobile viewports.
 
 ---
 

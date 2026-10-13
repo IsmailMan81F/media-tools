@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Clip Saver</title>
+  <title>Clip Saver - Media Downloader &amp; Cropper</title>
   <style>
     /* Typography declarations — Anthropic Serif & Anthropic Sans per DESIGN.md */
     @font-face {
@@ -84,12 +84,14 @@
       --color-obsidian: #000000;
       --color-clay: #d97757;
 
-      /* Typography — Font Families per DESIGN.md */
       --font-anthropic-serif: 'Anthropic Serif', 'Source Serif 4', ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
       --font-anthropic-sans: 'Anthropic Sans', 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 
       --font-serif: var(--font-anthropic-serif);
       --font-sans: var(--font-anthropic-sans);
+
+      --sidebar-width: 250px;
+      --sidebar-collapsed-width: 68px;
     }
 
     *, *::before, *::after {
@@ -106,64 +108,278 @@
       line-height: 1.5;
       min-height: 100vh;
       display: flex;
-      flex-direction: column;
       -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
     }
 
-    /* Top navigation bar */
-    .nav-bar {
-      width: 100%;
-      background-color: var(--color-bone);
-      border-bottom: 1px solid var(--color-chalk);
-      padding: 16px 24px;
+    /* SVG Icon styles */
+    .icon {
+      stroke-width: 2;
+      stroke: currentColor;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      display: inline-block;
+      vertical-align: middle;
+      flex-shrink: 0;
     }
 
-    .nav-inner {
-      max-width: 1200px;
-      margin: 0 auto;
+    .spin {
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    /* Sidebar Navigation */
+    .app-sidebar {
+      width: var(--sidebar-width);
+      background-color: var(--color-stone);
+      border-right: 1px solid var(--color-chalk);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      height: 100vh;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      transition: width 0.3s cubic-bezier(0.2, 0, 0, 1), transform 0.3s cubic-bezier(0.2, 0, 0, 1);
+      overflow-x: hidden;
+    }
+
+    body.sidebar-collapsed .app-sidebar {
+      width: var(--sidebar-collapsed-width);
+    }
+
+    .sidebar-header {
+      padding: 20px 16px;
       display: flex;
       align-items: center;
       justify-content: space-between;
+      border-bottom: 1px solid var(--color-chalk);
+      min-height: 65px;
     }
 
-    .brand {
-      font-family: var(--font-sans);
-      font-size: 16px;
-      font-weight: 500;
-      color: var(--color-carbon);
-      text-decoration: none;
-      display: inline-flex;
+    .sidebar-brand {
+      display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
+      text-decoration: none;
+      color: var(--color-carbon);
+      font-size: 15px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      transition: opacity 0.2s ease;
     }
 
     .brand-mark {
-      width: 8px;
-      height: 8px;
+      width: 10px;
+      height: 10px;
       border-radius: 50%;
       background-color: var(--color-clay);
-      display: inline-block;
+      flex-shrink: 0;
     }
 
-    /* Main container */
-    .main-wrap {
+    .brand-text {
+      transition: opacity 0.2s ease, width 0.2s ease;
+    }
+
+    body.sidebar-collapsed .brand-text {
+      opacity: 0;
+      width: 0;
+      pointer-events: none;
+    }
+
+    .sidebar-toggle-btn {
+      background: transparent;
+      border: none;
+      border-radius: 6px;
+      padding: 6px;
+      color: var(--color-graphite);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background-color 0.15s ease, color 0.15s ease;
+    }
+
+    .sidebar-toggle-btn:hover {
+      background-color: var(--color-chalk);
+      color: var(--color-carbon);
+    }
+
+    .sidebar-nav {
+      flex: 1;
+      padding: 16px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--color-graphite);
+      font-family: var(--font-sans);
+      font-size: 14px;
+      font-weight: 500;
+      text-align: left;
+      cursor: pointer;
+      white-space: nowrap;
+      width: 100%;
+      transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+    }
+
+    .nav-item:hover {
+      background-color: var(--color-chalk);
+      color: var(--color-carbon);
+    }
+
+    .nav-item.active {
+      background-color: var(--color-paper);
+      border-color: var(--color-chalk);
+      color: var(--color-carbon);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+    }
+
+    .nav-icon {
+      width: 18px;
+      height: 18px;
+      color: currentColor;
+    }
+
+    .nav-label {
+      transition: opacity 0.2s ease, width 0.2s ease;
+    }
+
+    body.sidebar-collapsed .nav-label {
+      opacity: 0;
+      width: 0;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    body.sidebar-collapsed .nav-item {
+      justify-content: center;
+      padding: 10px 0;
+    }
+
+    .sidebar-footer {
+      padding: 16px;
+      border-top: 1px solid var(--color-chalk);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .sidebar-footer-text {
+      font-size: 11px;
+      color: var(--color-ashen);
+      white-space: nowrap;
+      transition: opacity 0.2s ease;
+    }
+
+    body.sidebar-collapsed .sidebar-footer-text {
+      opacity: 0;
+      width: 0;
+      overflow: hidden;
+    }
+
+    /* Mobile Backdrop */
+    .sidebar-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background-color: rgba(18, 18, 18, 0.3);
+      z-index: 45;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    /* Main Application Area */
+    .app-main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      min-height: 100vh;
+    }
+
+    /* Top Bar */
+    .top-bar {
+      height: 65px;
+      background-color: var(--color-bone);
+      border-bottom: 1px solid var(--color-chalk);
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 40;
+    }
+
+    .top-bar-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .btn-hamburger {
+      display: none;
+      background: transparent;
+      border: none;
+      border-radius: 6px;
+      padding: 8px;
+      color: var(--color-carbon);
+      cursor: pointer;
+    }
+
+    .btn-hamburger:hover {
+      background-color: var(--color-stone);
+    }
+
+    .page-indicator {
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--color-carbon);
+    }
+
+    /* Content Views */
+    .view-container {
       flex: 1;
       width: 100%;
-      max-width: 1200px;
+      max-width: 1100px;
       margin: 0 auto;
-      padding: 0 24px 80px 24px;
+      padding: 40px 24px 80px 24px;
     }
 
-    /* Hero section */
+    .app-view {
+      display: none;
+    }
+
+    .app-view.active {
+      display: block;
+    }
+
+    /* Hero Section */
     .hero {
       text-align: center;
-      padding: 64px 0 48px 0;
+      padding: 24px 0 40px 0;
     }
 
     .hero-title-wrap {
       display: inline-flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
       margin-bottom: 12px;
     }
 
@@ -190,15 +406,14 @@
       margin: 0 auto;
     }
 
-    /* Primary Card */
+    /* Cards */
     .card-main {
       background-color: var(--color-paper);
       border: 1px solid var(--color-chalk);
       border-radius: 24px;
       padding: 32px;
-      max-width: 760px;
+      max-width: 800px;
       margin: 0 auto;
-      box-shadow: none;
       transition: box-shadow 0.2s ease;
     }
 
@@ -206,7 +421,16 @@
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
     }
 
-    /* Input form layout */
+    .card-nested {
+      background-color: var(--color-stone);
+      border-radius: 16px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* Form and Inputs */
     .form-group {
       display: flex;
       flex-direction: column;
@@ -257,7 +481,7 @@
       color: var(--color-ashen);
     }
 
-    /* Paste button embedded inside input */
+    /* Buttons */
     .btn-paste {
       position: absolute;
       right: 8px;
@@ -282,12 +506,6 @@
       background-color: var(--color-stone);
     }
 
-    .btn-paste:focus-visible {
-      outline: 2px solid var(--color-graphite);
-      outline-offset: 2px;
-    }
-
-    /* Buttons */
     .btn-primary {
       background-color: var(--color-carbon);
       color: var(--color-bone);
@@ -317,9 +535,27 @@
       cursor: not-allowed;
     }
 
-    .btn-primary:focus-visible {
-      outline: 2px solid var(--color-graphite);
-      outline-offset: 2px;
+    .btn-secondary {
+      background-color: transparent;
+      color: var(--color-graphite);
+      border: 1px solid var(--color-mist);
+      border-radius: 8px;
+      padding: 8px 16px;
+      height: 40px;
+      font-family: var(--font-sans);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: background-color 0.15s ease, color 0.15s ease;
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background-color: var(--color-stone);
+      color: var(--color-carbon);
     }
 
     .supported-labels {
@@ -332,7 +568,7 @@
       padding-top: 4px;
     }
 
-    /* Status and Alert Banner */
+    /* Status Banner */
     .status-banner {
       margin-top: 16px;
       border-radius: 8px;
@@ -357,7 +593,7 @@
       margin-top: 1px;
     }
 
-    /* Nested Card: Video Result */
+    /* Result Section */
     .result-section {
       margin-top: 24px;
       display: flex;
@@ -367,15 +603,6 @@
 
     .result-section.hidden {
       display: none;
-    }
-
-    .card-nested {
-      background-color: var(--color-stone);
-      border-radius: 16px;
-      padding: 24px;
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
     }
 
     .video-header {
@@ -454,7 +681,6 @@
       font-size: 12px;
       font-weight: 500;
       color: var(--color-graphite);
-      margin-bottom: 2px;
     }
 
     .quality-grid {
@@ -473,8 +699,8 @@
       display: flex;
       flex-direction: column;
       gap: 4px;
-      transition: border-color 0.15s ease, background-color 0.15s ease;
       user-select: none;
+      transition: border-color 0.15s ease;
     }
 
     .quality-tile input[type="radio"] {
@@ -527,17 +753,11 @@
       color: var(--color-ashen);
     }
 
-    /* Download action and progress bar */
+    /* Progress bar */
     .action-row {
       display: flex;
       flex-direction: column;
       gap: 16px;
-    }
-
-    .btn-download-wrap {
-      display: flex;
-      align-items: center;
-      gap: 12px;
     }
 
     .progress-section {
@@ -567,15 +787,6 @@
       transition: width 0.3s ease;
     }
 
-    @media (prefers-reduced-motion: reduce) {
-      .progress-fill {
-        transition: none;
-      }
-      .spin {
-        animation: none !important;
-      }
-    }
-
     .progress-info {
       display: flex;
       justify-content: space-between;
@@ -592,6 +803,242 @@
       margin-top: 4px;
     }
 
+    /* ================= CROPPER STYLES ================= */
+    .upload-zone {
+      border: 2px dashed var(--color-mist);
+      border-radius: 16px;
+      padding: 48px 24px;
+      text-align: center;
+      background-color: var(--color-stone);
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      transition: border-color 0.2s ease, background-color 0.2s ease;
+    }
+
+    .upload-zone:hover, .upload-zone.dragover {
+      border-color: var(--color-graphite);
+      background-color: var(--color-chalk);
+    }
+
+    .upload-icon {
+      width: 36px;
+      height: 36px;
+      color: var(--color-graphite);
+    }
+
+    .upload-title {
+      font-size: 16px;
+      font-weight: 500;
+      color: var(--color-carbon);
+    }
+
+    .upload-sub {
+      font-size: 12px;
+      color: var(--color-ashen);
+      max-width: 400px;
+    }
+
+    .cropper-player-wrap {
+      width: 100%;
+      border-radius: 12px;
+      overflow: hidden;
+      background-color: #000000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      max-height: 440px;
+    }
+
+    .cropper-video {
+      width: 100%;
+      max-height: 440px;
+      display: block;
+      outline: none;
+    }
+
+    .cropper-audio-card {
+      width: 100%;
+      background-color: var(--color-paper);
+      border: 1px solid var(--color-chalk);
+      border-radius: 12px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .audio-icon-wrap {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background-color: var(--color-stone);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--color-carbon);
+    }
+
+    .cropper-audio-elem {
+      width: 100%;
+      max-width: 500px;
+    }
+
+    /* Timeline & Boundaries Control */
+    .timeline-card {
+      background-color: var(--color-stone);
+      border-radius: 16px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .timeline-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .time-badge {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--color-carbon);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .selection-badge {
+      background-color: var(--color-paper);
+      border: 1px solid var(--color-chalk);
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--color-carbon);
+    }
+
+    .timeline-track-wrap {
+      position: relative;
+      width: 100%;
+      height: 38px;
+      background-color: var(--color-paper);
+      border: 1px solid var(--color-mist);
+      border-radius: 8px;
+      user-select: none;
+      cursor: pointer;
+    }
+
+    .timeline-selected-range {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      background-color: rgba(217, 119, 87, 0.18);
+      border-left: 2px solid var(--color-clay);
+      border-right: 2px solid var(--color-clay);
+      pointer-events: none;
+    }
+
+    .timeline-playhead {
+      position: absolute;
+      top: -4px;
+      bottom: -4px;
+      width: 2px;
+      background-color: var(--color-carbon);
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    .timeline-playhead::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -4px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background-color: var(--color-carbon);
+    }
+
+    .range-inputs-container {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .range-slider {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      pointer-events: all;
+      cursor: ew-resize;
+    }
+
+    /* Boundary Controls Grid */
+    .boundary-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .boundary-box {
+      background-color: var(--color-paper);
+      border: 1px solid var(--color-chalk);
+      border-radius: 10px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .boundary-box-title {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--color-graphite);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .boundary-input-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .boundary-time-input {
+      width: 90px;
+      height: 36px;
+      border: 1px solid var(--color-mist);
+      border-radius: 6px;
+      padding: 0 8px;
+      font-family: var(--font-sans);
+      font-size: 13px;
+      color: var(--color-carbon);
+      background-color: var(--color-paper);
+    }
+
+    .boundary-time-input:focus {
+      outline: 2px solid var(--color-graphite);
+      outline-offset: 1px;
+    }
+
+    .cropper-actions {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 8px;
+    }
+
     /* Footer */
     .footer-band {
       background-color: var(--color-obsidian);
@@ -604,7 +1051,7 @@
       margin: 0 auto;
       display: flex;
       flex-direction: column;
-      gap: 20px;
+      gap: 16px;
       text-align: center;
     }
 
@@ -621,39 +1068,45 @@
       font-size: 12px;
     }
 
-    /* SVG Icon styles */
-    .icon {
-      stroke-width: 2;
-      stroke: currentColor;
-      fill: none;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      display: inline-block;
-      vertical-align: middle;
-    }
-
-    .spin {
-      animation: spin 1s linear infinite;
-    }
-
-    @keyframes spin {
-      from { transform: rotate(0deg); }
-      to { transform: rotate(360deg); }
-    }
-
-    /* Mobile Responsive Stacking */
+    /* Responsive adjustments */
     @media (max-width: 768px) {
+      .app-sidebar {
+        position: fixed;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        transform: translateX(-100%);
+        box-shadow: 4px 0 24px rgba(0, 0, 0, 0.1);
+      }
+
+      body.mobile-sidebar-open .app-sidebar {
+        transform: translateX(0);
+      }
+
+      body.mobile-sidebar-open .sidebar-backdrop {
+        display: block;
+        opacity: 1;
+      }
+
+      .btn-hamburger {
+        display: flex;
+      }
+
+      .boundary-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .card-main {
+        padding: 24px 16px;
+        border-radius: 16px;
+      }
+
       .input-row {
         flex-direction: column;
       }
 
       .btn-primary {
         width: 100%;
-      }
-
-      .card-main {
-        padding: 24px 16px;
-        border-radius: 16px;
       }
 
       .video-header {
@@ -663,14 +1116,6 @@
       .thumbnail-wrap {
         width: 100%;
         height: 180px;
-      }
-
-      .hero {
-        padding: 40px 0 32px 0;
-      }
-
-      .hero-title {
-        font-size: 24px;
       }
 
       .quality-grid {
@@ -687,170 +1132,473 @@
 </head>
 <body>
 
-  <!-- Minimal Navigation -->
-  <nav class="nav-bar" aria-label="Main Navigation">
-    <div class="nav-inner">
-      <a href="/" class="brand">
-        <span class="brand-mark" aria-hidden="true"></span>
-        Clip Saver
-      </a>
-    </div>
-  </nav>
+  <!-- Mobile Sidebar Backdrop Overlay -->
+  <div id="sidebar-backdrop" class="sidebar-backdrop" onclick="toggleMobileSidebar(false)"></div>
 
-  <!-- Main View -->
-  <main class="main-wrap">
-    <!-- Hero Section -->
-    <header class="hero">
-      <div class="hero-title-wrap">
-        <h1 class="hero-title">Save any video, in the quality you choose</h1>
-        <span class="clay-dot" aria-hidden="true"></span>
+  <!-- Sidebar Navigation -->
+  <aside id="app-sidebar" class="app-sidebar" aria-label="Application Navigation">
+    <div class="sidebar-header">
+      <a href="/" class="sidebar-brand">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-text">Clip Saver</span>
+      </a>
+      <button
+        type="button"
+        id="sidebar-toggle-btn"
+        class="sidebar-toggle-btn"
+        onclick="toggleSidebarCollapse()"
+        title="Toggle sidebar"
+        aria-label="Toggle sidebar collapse"
+      >
+        <svg id="toggle-icon" class="icon" style="width: 18px; height: 18px;" viewBox="0 0 24 24">
+          <rect width="18" height="18" x="3" y="3" rx="2"/>
+          <path d="M9 3v18"/>
+          <path d="m16 15-3-3 3-3"/>
+        </svg>
+      </button>
+    </div>
+
+    <nav class="sidebar-nav">
+      <button
+        type="button"
+        id="nav-btn-downloader"
+        class="nav-item active"
+        onclick="switchPage('downloader')"
+        title="Media Downloader"
+      >
+        <svg class="icon nav-icon" viewBox="0 0 24 24">
+          <path d="M12 15V3"/>
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <path d="m7 10 5 5 5-5"/>
+        </svg>
+        <span class="nav-label">Media Downloader</span>
+      </button>
+
+      <button
+        type="button"
+        id="nav-btn-cropper"
+        class="nav-item"
+        onclick="switchPage('cropper')"
+        title="Media Cropper"
+      >
+        <svg class="icon nav-icon" viewBox="0 0 24 24">
+          <circle cx="6" cy="6" r="3"/>
+          <path d="M8.12 8.12 12 12"/>
+          <path d="M20 4 8.12 15.88"/>
+          <circle cx="6" cy="18" r="3"/>
+          <path d="M14.8 14.8 20 20"/>
+        </svg>
+        <span class="nav-label">Media Cropper</span>
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <span class="sidebar-footer-text">Warm Parchment Edition</span>
+    </div>
+  </aside>
+
+  <!-- Main Content Layout -->
+  <div class="app-main">
+    <!-- Top Navigation Bar -->
+    <header class="top-bar">
+      <div class="top-bar-left">
+        <button
+          type="button"
+          class="btn-hamburger"
+          onclick="toggleMobileSidebar(true)"
+          aria-label="Open navigation menu"
+        >
+          <svg class="icon" style="width: 20px; height: 20px;" viewBox="0 0 24 24">
+            <line x1="4" x2="20" y1="12" y2="12"/>
+            <line x1="4" x2="20" y1="6" y2="6"/>
+            <line x1="4" x2="20" y1="18" y2="18"/>
+          </svg>
+        </button>
+        <span id="page-title-indicator" class="page-indicator">Media Downloader</span>
       </div>
-      <p class="hero-desc">Download videos and audio from YouTube, TikTok, Instagram, Facebook, and X.</p>
     </header>
 
-    <!-- Main Elevated Card -->
-    <section class="card-main" aria-label="Video downloader form">
-      <form id="check-form" class="form-group" onsubmit="handleCheck(event)">
-        <label for="url-input" style="font-weight: 500; color: var(--color-graphite);">Video link</label>
-        <div class="input-row">
-          <div class="input-field-wrap">
-            <svg class="icon input-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
-              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
-            </svg>
-            <input
-              type="url"
-              id="url-input"
-              class="input-text"
-              placeholder="Paste a link from YouTube, TikTok, Instagram, Facebook, or X"
-              required
-              autocomplete="off"
-            />
-            <button
-              type="button"
-              id="paste-btn"
-              class="btn-paste"
-              onclick="handlePaste()"
-              aria-label="Paste URL from clipboard"
-            >
-              <svg class="icon" style="width: 14px; height: 14px;" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M15 2H9a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1Z"/>
-                <path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2M16 4h2a2 2 0 0 1 2 2v2"/>
-                <path d="M11 14h10"/>
-                <path d="m17 10 4 4-4 4"/>
-              </svg>
-              Paste
-            </button>
+    <main class="view-container">
+
+      <!-- ================= PAGE 1: MEDIA DOWNLOADER ================= -->
+      <section id="view-downloader" class="app-view active" aria-label="Media Downloader View">
+        <header class="hero">
+          <div class="hero-title-wrap">
+            <h1 class="hero-title">Save any video, in the quality you choose</h1>
+            <span class="clay-dot" aria-hidden="true"></span>
           </div>
-          <button type="submit" id="check-btn" class="btn-primary">
-            <span id="check-btn-text">Check link</span>
-          </button>
-        </div>
+          <p class="hero-desc">Download videos and audio from YouTube, TikTok, Instagram, Facebook, and X.</p>
+        </header>
 
-        <div class="supported-labels">
-          <span>Supported: YouTube Videos &amp; Shorts</span>
-          <span>TikTok</span>
-          <span>Instagram Reels</span>
-          <span>Facebook</span>
-          <span>X (Twitter)</span>
-        </div>
-      </form>
-
-      <!-- Error / Status Message Banner -->
-      <div id="status-banner" class="status-banner hidden" role="status" aria-live="polite">
-        <svg id="status-icon" class="icon status-icon" viewBox="0 0 24 24" aria-hidden="true">
-          <circle cx="12" cy="12" r="10"/>
-          <line x1="12" x2="12" y1="8" y2="12"/>
-          <line x1="12" x2="12.01" y1="16" y2="16"/>
-        </svg>
-        <span id="status-text"></span>
-      </div>
-
-      <!-- Result Card (Populated after link check) -->
-      <div id="result-section" class="result-section hidden">
-        <div class="card-nested">
-          <!-- Video Header -->
-          <div class="video-header">
-            <div class="thumbnail-wrap">
-              <img id="video-thumbnail" class="thumbnail-img" src="" alt="Video thumbnail preview" />
-            </div>
-            <div class="video-info">
-              <h2 id="video-title" class="video-title"></h2>
-              <div class="meta-row">
-                <span class="meta-item">
-                  <svg class="icon meta-icon" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/>
-                    <circle cx="12" cy="7" r="4"/>
-                  </svg>
-                  <span id="video-uploader"></span>
-                </span>
-                <span class="meta-item">
-                  <svg class="icon meta-icon" viewBox="0 0 24 24" aria-hidden="true">
-                    <circle cx="12" cy="12" r="10"/>
-                    <polyline points="12 6 12 12 16 14"/>
-                  </svg>
-                  <span id="video-duration"></span>
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Quality Selection Tiles -->
-          <fieldset class="quality-fieldset">
-            <legend class="quality-legend">Choose quality</legend>
-            <div id="quality-grid" class="quality-grid" role="radiogroup" aria-label="Selectable video quality options">
-              <!-- Dynamically populated tiles -->
-            </div>
-          </fieldset>
-
-          <!-- Download Action and Real Progress Bar -->
-          <div class="action-row">
-            <div class="btn-download-wrap">
-              <button type="button" id="download-btn" class="btn-primary" onclick="handleDownload()">
-                <svg id="download-btn-icon" class="icon" style="width: 16px; height: 16px;" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M12 15V3"/>
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                  <path d="m7 10 5 5 5-5"/>
+        <div class="card-main">
+          <form id="check-form" class="form-group" onsubmit="handleCheck(event)">
+            <label for="url-input" style="font-weight: 500; color: var(--color-graphite);">Video link</label>
+            <div class="input-row">
+              <div class="input-field-wrap">
+                <svg class="icon input-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
                 </svg>
-                <span id="download-btn-text">Download</span>
+                <input
+                  type="url"
+                  id="url-input"
+                  class="input-text"
+                  placeholder="Paste a link from YouTube, TikTok, Instagram, Facebook, or X"
+                  required
+                  autocomplete="off"
+                />
+                <button
+                  type="button"
+                  id="paste-btn"
+                  class="btn-paste"
+                  onclick="handlePaste()"
+                  aria-label="Paste URL from clipboard"
+                >
+                  <svg class="icon" style="width: 14px; height: 14px;" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M15 2H9a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1Z"/>
+                    <path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2M16 4h2a2 2 0 0 1 2 2v2"/>
+                    <path d="M11 14h10"/>
+                    <path d="m17 10 4 4-4 4"/>
+                  </svg>
+                  Paste
+                </button>
+              </div>
+              <button type="submit" id="check-btn" class="btn-primary">
+                <span id="check-btn-text">Check link</span>
               </button>
             </div>
 
-            <!-- Progress Bar Section -->
-            <div id="progress-section" class="progress-section hidden" aria-live="polite">
-              <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" id="progress-track">
-                <div id="progress-fill" class="progress-fill"></div>
+            <div class="supported-labels">
+              <span>Supported: YouTube Videos &amp; Shorts</span>
+              <span>TikTok</span>
+              <span>Instagram Reels</span>
+              <span>Facebook</span>
+              <span>X (Twitter)</span>
+            </div>
+          </form>
+
+          <!-- Status Banner -->
+          <div id="status-banner" class="status-banner hidden" role="status" aria-live="polite">
+            <svg id="status-icon" class="icon status-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" x2="12" y1="8" y2="12"/>
+              <line x1="12" x2="12.01" y1="16" y2="16"/>
+            </svg>
+            <span id="status-text"></span>
+          </div>
+
+          <!-- Video Result Card -->
+          <div id="result-section" class="result-section hidden">
+            <div class="card-nested">
+              <div class="video-header">
+                <div class="thumbnail-wrap">
+                  <img id="video-thumbnail" class="thumbnail-img" src="" alt="Video thumbnail preview" />
+                </div>
+                <div class="video-info">
+                  <h2 id="video-title" class="video-title"></h2>
+                  <div class="meta-row">
+                    <span class="meta-item">
+                      <svg class="icon meta-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/>
+                        <circle cx="12" cy="7" r="4"/>
+                      </svg>
+                      <span id="video-uploader"></span>
+                    </span>
+                    <span class="meta-item">
+                      <svg class="icon meta-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="12" cy="12" r="10"/>
+                        <polyline points="12 6 12 12 16 14"/>
+                      </svg>
+                      <span id="video-duration"></span>
+                    </span>
+                  </div>
+                </div>
               </div>
-              <div class="progress-info">
-                <span id="progress-label">Preparing download...</span>
-                <span id="progress-percent">0%</span>
-              </div>
-              <div id="manual-download-link-wrap" style="display: none;">
-                <a id="manual-download-link" class="manual-link" href="#" download>Click here if download does not begin automatically</a>
+
+              <!-- Quality Selection -->
+              <fieldset class="quality-fieldset">
+                <legend class="quality-legend">Choose quality</legend>
+                <div id="quality-grid" class="quality-grid" role="radiogroup" aria-label="Selectable video quality options">
+                </div>
+              </fieldset>
+
+              <!-- Download Button and Progress -->
+              <div class="action-row">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <button type="button" id="download-btn" class="btn-primary" onclick="handleDownload()">
+                    <svg id="download-btn-icon" class="icon" style="width: 16px; height: 16px;" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M12 15V3"/>
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                      <path d="m7 10 5 5 5-5"/>
+                    </svg>
+                    <span id="download-btn-text">Download</span>
+                  </button>
+                </div>
+
+                <div id="progress-section" class="progress-section hidden" aria-live="polite">
+                  <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100">
+                    <div id="progress-fill" class="progress-fill"></div>
+                  </div>
+                  <div class="progress-info">
+                    <span id="progress-label">Preparing download...</span>
+                    <span id="progress-percent">0%</span>
+                  </div>
+                  <div id="manual-download-link-wrap" style="display: none;">
+                    <a id="manual-download-link" class="manual-link" href="#" download>Click here if download does not begin automatically</a>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
-    </section>
-  </main>
+      </section>
 
-  <!-- Footer Band -->
-  <footer class="footer-band">
-    <div class="footer-inner">
-      <p class="footer-notice">
-        Only download videos you own or have permission to save. Respect each platform's terms and the creator's rights.
-      </p>
-      <p class="footer-copy">Clip Saver</p>
-    </div>
-  </footer>
+
+      <!-- ================= PAGE 2: MEDIA CROPPER ================= -->
+      <section id="view-cropper" class="app-view" aria-label="Media Cropper View">
+        <header class="hero">
+          <div class="hero-title-wrap">
+            <h1 class="hero-title">Crop and trim audio &amp; video</h1>
+            <span class="clay-dot" aria-hidden="true"></span>
+          </div>
+          <p class="hero-desc">Upload a media file, set timeline boundaries, and export your clip.</p>
+        </header>
+
+        <div class="card-main">
+          <!-- Step 1: Upload Dropzone -->
+          <div id="crop-upload-container">
+            <input
+              type="file"
+              id="crop-file-input"
+              accept="video/*,audio/*"
+              style="display: none;"
+              onchange="handleCropperFileSelect(event)"
+            />
+            <div
+              id="crop-dropzone"
+              class="upload-zone"
+              onclick="document.getElementById('crop-file-input').click()"
+              ondragover="handleDragOver(event)"
+              ondragleave="handleDragLeave(event)"
+              ondrop="handleDrop(event)"
+              tabindex="0"
+              role="button"
+              aria-label="Upload media file"
+            >
+              <svg class="icon upload-icon" viewBox="0 0 24 24">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/>
+                <line x1="12" x2="12" y1="3" y2="15"/>
+              </svg>
+              <div class="upload-title">Choose a media file or drag it here</div>
+              <div class="upload-sub">Supports MP4, WebM, MOV, MKV, MP3, WAV, M4A, AAC, and FLAC (up to 500 MB)</div>
+            </div>
+          </div>
+
+          <!-- Cropper Status Banner -->
+          <div id="crop-status-banner" class="status-banner hidden" role="status" aria-live="polite">
+            <svg id="crop-status-icon" class="icon status-icon" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" x2="12" y1="8" y2="12"/>
+              <line x1="12" x2="12.01" y1="16" y2="16"/>
+            </svg>
+            <span id="crop-status-text"></span>
+          </div>
+
+          <!-- Step 2: Player & Timeline Editor -->
+          <div id="crop-editor-container" class="result-section hidden">
+            <!-- Media Player Section -->
+            <div id="cropper-video-box" class="cropper-player-wrap" style="display: none;">
+              <video id="cropper-video-elem" class="cropper-video" controls playsinline></video>
+            </div>
+
+            <div id="cropper-audio-box" class="cropper-audio-card" style="display: none;">
+              <div class="audio-icon-wrap">
+                <svg class="icon" style="width: 24px; height: 24px;" viewBox="0 0 24 24">
+                  <path d="M9 18V5l12-2v13"/>
+                  <circle cx="6" cy="18" r="3"/>
+                  <circle cx="18" cy="16" r="3"/>
+                </svg>
+              </div>
+              <div id="cropper-audio-name" style="font-weight: 500; font-size: 15px;"></div>
+              <audio id="cropper-audio-elem" class="cropper-audio-elem" controls></audio>
+            </div>
+
+            <!-- Timeline & Boundaries Control -->
+            <div class="timeline-card">
+              <div class="timeline-header">
+                <div class="time-badge">
+                  <svg class="icon" style="width: 14px; height: 14px; color: var(--color-ashen);" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12 6 12 12 16 14"/>
+                  </svg>
+                  <span>Position: <strong id="timeline-current-pos">00:00.0</strong></span>
+                </div>
+                <div class="selection-badge">
+                  Duration: <strong id="timeline-selection-len">00:00.0</strong>
+                </div>
+                <div class="time-badge">
+                  <span>Total: <strong id="timeline-total-len">00:00.0</strong></span>
+                </div>
+              </div>
+
+              <!-- Interactive Timeline Scrub Track -->
+              <div id="timeline-track-wrap" class="timeline-track-wrap" onclick="handleTrackClick(event)">
+                <div id="timeline-range-highlight" class="timeline-selected-range"></div>
+                <div id="timeline-playhead-marker" class="timeline-playhead"></div>
+              </div>
+
+              <!-- Exact Boundary Inputs -->
+              <div class="boundary-grid">
+                <div class="boundary-box">
+                  <div class="boundary-box-title">
+                    <span>Start Boundary</span>
+                    <button type="button" class="btn-secondary" style="height: 28px; padding: 0 8px; font-size: 11px;" onclick="setStartToCurrent()">
+                      Set Current
+                    </button>
+                  </div>
+                  <div class="boundary-input-row">
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      id="crop-start-input"
+                      class="boundary-time-input"
+                      value="0.0"
+                      onchange="handleManualTimeChange()"
+                    />
+                    <span style="font-size: 12px; color: var(--color-ashen);">sec (<span id="crop-start-formatted">00:00.0</span>)</span>
+                  </div>
+                </div>
+
+                <div class="boundary-box">
+                  <div class="boundary-box-title">
+                    <span>End Boundary</span>
+                    <button type="button" class="btn-secondary" style="height: 28px; padding: 0 8px; font-size: 11px;" onclick="setEndToCurrent()">
+                      Set Current
+                    </button>
+                  </div>
+                  <div class="boundary-input-row">
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0.1"
+                      id="crop-end-input"
+                      class="boundary-time-input"
+                      value="0.0"
+                      onchange="handleManualTimeChange()"
+                    />
+                    <span style="font-size: 12px; color: var(--color-ashen);">sec (<span id="crop-end-formatted">00:00.0</span>)</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Action Controls -->
+              <div class="cropper-actions">
+                <button type="button" class="btn-secondary" onclick="previewCropSelection()">
+                  <svg class="icon" style="width: 14px; height: 14px;" viewBox="0 0 24 24">
+                    <polygon points="6 3 20 12 6 21 6 3"/>
+                  </svg>
+                  Preview Range
+                </button>
+
+                <button type="button" id="crop-process-btn" class="btn-primary" onclick="handleCropProcess()">
+                  <svg id="crop-process-icon" class="icon" style="width: 16px; height: 16px;" viewBox="0 0 24 24">
+                    <circle cx="6" cy="6" r="3"/>
+                    <path d="M8.12 8.12 12 12"/>
+                    <path d="M20 4 8.12 15.88"/>
+                    <circle cx="6" cy="18" r="3"/>
+                    <path d="M14.8 14.8 20 20"/>
+                  </svg>
+                  <span id="crop-process-text">Crop &amp; Export</span>
+                </button>
+
+                <button type="button" class="btn-secondary" onclick="resetCropper()">
+                  Choose Another File
+                </button>
+              </div>
+
+              <!-- Crop Output Progress -->
+              <div id="crop-progress-box" class="progress-section hidden" aria-live="polite">
+                <div class="progress-track" role="progressbar">
+                  <div id="crop-progress-fill" class="progress-fill" style="width: 100%;"></div>
+                </div>
+                <div class="progress-info">
+                  <span id="crop-progress-label">Trimming media with FFmpeg...</span>
+                </div>
+                <div id="crop-manual-dl-wrap" style="display: none; margin-top: 8px;">
+                  <a id="crop-manual-dl-link" class="manual-link" href="#" download>Click here if download does not start automatically</a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer-band">
+      <div class="footer-inner">
+        <p class="footer-notice">
+          Only download and edit media you own or have permission to process. Respect creator copyright and platform policies.
+        </p>
+        <p class="footer-copy">Clip Saver</p>
+      </div>
+    </footer>
+  </div>
 
   <script>
+    // ================= GLOBAL NAVIGATION & SIDEBAR =================
+    let isSidebarCollapsed = false;
+
+    function toggleSidebarCollapse() {
+      isSidebarCollapsed = !isSidebarCollapsed;
+      document.body.classList.toggle('sidebar-collapsed', isSidebarCollapsed);
+      const icon = document.getElementById('toggle-icon');
+      if (isSidebarCollapsed) {
+        icon.innerHTML = '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m14 9 3 3-3 3"/>';
+      } else {
+        icon.innerHTML = '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m16 15-3-3 3-3"/>';
+      }
+    }
+
+    function toggleMobileSidebar(open) {
+      document.body.classList.toggle('mobile-sidebar-open', open);
+    }
+
+    function switchPage(pageKey) {
+      document.querySelectorAll('.nav-item').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.app-view').forEach(view => view.classList.remove('active'));
+
+      if (pageKey === 'downloader') {
+        document.getElementById('nav-btn-downloader').classList.add('active');
+        document.getElementById('view-downloader').classList.add('active');
+        document.getElementById('page-title-indicator').textContent = 'Media Downloader';
+      } else if (pageKey === 'cropper') {
+        document.getElementById('nav-btn-cropper').classList.add('active');
+        document.getElementById('view-cropper').classList.add('active');
+        document.getElementById('page-title-indicator').textContent = 'Media Cropper';
+      }
+
+      // Close mobile drawer on navigation
+      toggleMobileSidebar(false);
+    }
+
+    function formatTime(seconds) {
+      if (isNaN(seconds) || seconds < 0) return '00:00.0';
+      const mins = Math.floor(seconds / 60);
+      const secs = seconds % 60;
+      const mStr = String(mins).padStart(2, '0');
+      const sStr = secs.toFixed(1).padStart(4, '0');
+      return `${mStr}:${sStr}`;
+    }
+
+    // ================= MEDIA DOWNLOADER LOGIC =================
     let currentVideoData = null;
     let selectedQuality = null;
     let activePollInterval = null;
 
-    // Paste handler
     async function handlePaste() {
       try {
         const text = await navigator.clipboard.readText();
@@ -859,7 +1607,6 @@
           hideStatus();
         }
       } catch (err) {
-        // Fallback for browsers that block clipboard API without user gesture
         document.getElementById('url-input').focus();
       }
     }
@@ -879,11 +1626,9 @@
     }
 
     function hideStatus() {
-      const banner = document.getElementById('status-banner');
-      banner.classList.add('hidden');
+      document.getElementById('status-banner').classList.add('hidden');
     }
 
-    // Step 1: Check link
     async function handleCheck(event) {
       event.preventDefault();
       const urlInput = document.getElementById('url-input');
@@ -903,7 +1648,6 @@
         activePollInterval = null;
       }
 
-      // Set loading state
       checkBtn.disabled = true;
       checkBtnText.innerHTML = '<svg class="icon spin" style="width:16px;height:16px;margin-right:6px;" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>Checking link...';
 
@@ -929,7 +1673,6 @@
       }
     }
 
-    // Render video preview and quality tiles
     function renderVideoResult(data) {
       document.getElementById('video-title').textContent = data.title;
       document.getElementById('video-uploader').textContent = data.uploader;
@@ -943,7 +1686,6 @@
         thumb.style.display = 'none';
       }
 
-      // Quality tiles
       const grid = document.getElementById('quality-grid');
       grid.innerHTML = '';
 
@@ -1005,7 +1747,6 @@
         grid.appendChild(tile);
       });
 
-      // Reset download button
       const downloadBtn = document.getElementById('download-btn');
       downloadBtn.disabled = false;
       document.getElementById('download-btn-text').textContent = 'Download';
@@ -1014,7 +1755,6 @@
       document.getElementById('result-section').classList.remove('hidden');
     }
 
-    // Step 2 & 3: Prepare download and track progress
     async function handleDownload() {
       if (!currentVideoData || !selectedQuality) return;
 
@@ -1101,7 +1841,6 @@
             downloadBtnIcon.classList.remove('spin');
             downloadBtnIcon.innerHTML = '<path d="M20 6 9 17l-5-5"/>';
 
-            // Trigger automatic browser download
             const fileUrl = `/api/file/${jobId}`;
             const downloadAnchor = document.createElement('a');
             downloadAnchor.href = fileUrl;
@@ -1110,7 +1849,6 @@
             downloadAnchor.click();
             document.body.removeChild(downloadAnchor);
 
-            // Setup manual fallback link
             manualLink.href = fileUrl;
             manualWrap.style.display = 'block';
 
@@ -1136,6 +1874,285 @@
           downloadBtnIcon.innerHTML = '<path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/>';
         }
       }, 750);
+    }
+
+    // ================= MEDIA CROPPER LOGIC =================
+    let currentCropperData = null;
+    let activePlayer = null;
+    let cropStartTime = 0;
+    let cropEndTime = 0;
+    let cropDuration = 0;
+    let isPreviewLooping = false;
+
+    function showCropStatus(message, isError = true) {
+      const banner = document.getElementById('crop-status-banner');
+      const text = document.getElementById('crop-status-text');
+      const icon = document.getElementById('crop-status-icon');
+
+      text.textContent = message;
+      if (isError) {
+        icon.innerHTML = '<circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/>';
+      } else {
+        icon.innerHTML = '<path d="M20 6 9 17l-5-5"/>';
+      }
+      banner.classList.remove('hidden');
+    }
+
+    function hideCropStatus() {
+      document.getElementById('crop-status-banner').classList.add('hidden');
+    }
+
+    function handleDragOver(e) {
+      e.preventDefault();
+      document.getElementById('crop-dropzone').classList.add('dragover');
+    }
+
+    function handleDragLeave(e) {
+      e.preventDefault();
+      document.getElementById('crop-dropzone').classList.remove('dragover');
+    }
+
+    function handleDrop(e) {
+      e.preventDefault();
+      document.getElementById('crop-dropzone').classList.remove('dragover');
+      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+        uploadCropperFile(e.dataTransfer.files[0]);
+      }
+    }
+
+    function handleCropperFileSelect(e) {
+      if (e.target.files && e.target.files[0]) {
+        uploadCropperFile(e.target.files[0]);
+      }
+    }
+
+    async function uploadCropperFile(file) {
+      hideCropStatus();
+      const dropzone = document.getElementById('crop-dropzone');
+      dropzone.innerHTML = '<svg class="icon spin upload-icon" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg><div class="upload-title">Uploading &amp; probing media...</div>';
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        const res = await fetch('/api/crop/upload', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || 'Failed to upload media file.');
+        }
+
+        currentCropperData = data;
+        initCropperEditor(data);
+      } catch (err) {
+        showCropStatus(err.message, true);
+        resetCropper();
+      }
+    }
+
+    function initCropperEditor(data) {
+      document.getElementById('crop-upload-container').style.display = 'none';
+      document.getElementById('crop-editor-container').classList.remove('hidden');
+
+      cropDuration = data.duration;
+      cropStartTime = 0;
+      cropEndTime = data.duration;
+
+      document.getElementById('timeline-total-len').textContent = formatTime(cropDuration);
+      document.getElementById('crop-start-input').max = cropDuration;
+      document.getElementById('crop-end-input').max = cropDuration;
+      document.getElementById('crop-start-input').value = '0.0';
+      document.getElementById('crop-end-input').value = cropDuration.toFixed(1);
+
+      updateBoundaryDisplays();
+
+      // Configure player
+      const videoBox = document.getElementById('cropper-video-box');
+      const audioBox = document.getElementById('cropper-audio-box');
+      const videoElem = document.getElementById('cropper-video-elem');
+      const audioElem = document.getElementById('cropper-audio-elem');
+
+      if (data.is_video) {
+        audioBox.style.display = 'none';
+        videoBox.style.display = 'flex';
+        videoElem.src = data.preview_url;
+        activePlayer = videoElem;
+      } else {
+        videoBox.style.display = 'none';
+        audioBox.style.display = 'flex';
+        document.getElementById('cropper-audio-name').textContent = data.filename;
+        audioElem.src = data.preview_url;
+        activePlayer = audioElem;
+      }
+
+      // Synchronize playhead with timeline
+      activePlayer.ontimeupdate = () => {
+        const cur = activePlayer.currentTime;
+        document.getElementById('timeline-current-pos').textContent = formatTime(cur);
+
+        // Move playhead marker
+        const pct = (cur / cropDuration) * 100;
+        document.getElementById('timeline-playhead-marker').style.left = `${Math.min(Math.max(pct, 0), 100)}%`;
+
+        // If previewing selection and exceeded end time, stop
+        if (isPreviewLooping && cur >= cropEndTime) {
+          activePlayer.pause();
+          isPreviewLooping = false;
+        }
+      };
+    }
+
+    function updateBoundaryDisplays() {
+      const selLen = Math.max(cropEndTime - cropStartTime, 0);
+      document.getElementById('timeline-selection-len').textContent = formatTime(selLen);
+      document.getElementById('crop-start-formatted').textContent = formatTime(cropStartTime);
+      document.getElementById('crop-end-formatted').textContent = formatTime(cropEndTime);
+
+      if (cropDuration > 0) {
+        const leftPct = (cropStartTime / cropDuration) * 100;
+        const rightPct = (cropEndTime / cropDuration) * 100;
+        const highlight = document.getElementById('timeline-range-highlight');
+        highlight.style.left = `${leftPct}%`;
+        highlight.style.width = `${Math.max(rightPct - leftPct, 0)}%`;
+      }
+    }
+
+    function handleManualTimeChange() {
+      const startInp = document.getElementById('crop-start-input');
+      const endInp = document.getElementById('crop-end-input');
+
+      let s = parseFloat(startInp.value) || 0;
+      let e = parseFloat(endInp.value) || cropDuration;
+
+      s = Math.max(0, Math.min(s, cropDuration));
+      e = Math.max(s + 0.1, Math.min(e, cropDuration));
+
+      cropStartTime = s;
+      cropEndTime = e;
+      startInp.value = s.toFixed(1);
+      endInp.value = e.toFixed(1);
+
+      updateBoundaryDisplays();
+    }
+
+    function setStartToCurrent() {
+      if (!activePlayer) return;
+      const cur = activePlayer.currentTime;
+      cropStartTime = Math.min(cur, cropEndTime - 0.1);
+      document.getElementById('crop-start-input').value = cropStartTime.toFixed(1);
+      updateBoundaryDisplays();
+    }
+
+    function setEndToCurrent() {
+      if (!activePlayer) return;
+      const cur = activePlayer.currentTime;
+      cropEndTime = Math.max(cur, cropStartTime + 0.1);
+      document.getElementById('crop-end-input').value = cropEndTime.toFixed(1);
+      updateBoundaryDisplays();
+    }
+
+    function handleTrackClick(e) {
+      if (!activePlayer || cropDuration <= 0) return;
+      const rect = e.currentTarget.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const pct = clickX / rect.width;
+      const seekTime = Math.min(Math.max(pct * cropDuration, 0), cropDuration);
+      activePlayer.currentTime = seekTime;
+    }
+
+    function previewCropSelection() {
+      if (!activePlayer) return;
+      isPreviewLooping = true;
+      activePlayer.currentTime = cropStartTime;
+      activePlayer.play();
+    }
+
+    async function handleCropProcess() {
+      if (!currentCropperData) return;
+
+      const processBtn = document.getElementById('crop-process-btn');
+      const processText = document.getElementById('crop-process-text');
+      const processIcon = document.getElementById('crop-process-icon');
+      const progressBox = document.getElementById('crop-progress-box');
+      const progressLabel = document.getElementById('crop-progress-label');
+      const manualDlWrap = document.getElementById('crop-manual-dl-wrap');
+      const manualDlLink = document.getElementById('crop-manual-dl-link');
+
+      hideCropStatus();
+      manualDlWrap.style.display = 'none';
+      progressBox.classList.remove('hidden');
+      progressLabel.textContent = 'Trimming media with FFmpeg...';
+
+      processBtn.disabled = true;
+      processText.textContent = 'Processing...';
+      processIcon.innerHTML = '<path d="M21 12a9 9 0 1 1-6.219-8.56"/>';
+      processIcon.classList.add('spin');
+
+      try {
+        const res = await fetch('/api/crop/process', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            file_id: currentCropperData.file_id,
+            start_time: cropStartTime,
+            end_time: cropEndTime
+          })
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || 'Failed to crop media file.');
+        }
+
+        progressLabel.textContent = 'Cropped media is ready';
+        processText.textContent = 'Export Complete';
+        processIcon.classList.remove('spin');
+        processIcon.innerHTML = '<path d="M20 6 9 17l-5-5"/>';
+
+        // Automatic download trigger
+        const dlUrl = data.download_url;
+        const a = document.createElement('a');
+        a.href = dlUrl;
+        a.download = data.filename || '';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+
+        manualDlLink.href = dlUrl;
+        manualDlLink.download = data.filename || '';
+        manualDlWrap.style.display = 'block';
+
+        showCropStatus('Media cropped successfully. Download started.', false);
+      } catch (err) {
+        showCropStatus(err.message, true);
+        progressBox.classList.add('hidden');
+      } finally {
+        processBtn.disabled = false;
+        setTimeout(() => {
+          processText.textContent = 'Crop & Export';
+          processIcon.classList.remove('spin');
+          processIcon.innerHTML = '<circle cx="6" cy="6" r="3"/><path d="M8.12 8.12 12 12"/><path d="M20 4 8.12 15.88"/><circle cx="6" cy="18" r="3"/><path d="M14.8 14.8 20 20"/>';
+        }, 3000);
+      }
+    }
+
+    function resetCropper() {
+      if (activePlayer) {
+        activePlayer.pause();
+        activePlayer.src = '';
+      }
+      currentCropperData = null;
+      activePlayer = null;
+
+      document.getElementById('crop-file-input').value = '';
+      document.getElementById('crop-dropzone').innerHTML = '<svg class="icon upload-icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg><div class="upload-title">Choose a media file or drag it here</div><div class="upload-sub">Supports MP4, WebM, MOV, MKV, MP3, WAV, M4A, AAC, and FLAC (up to 500 MB)</div>';
+      document.getElementById('crop-editor-container').classList.add('hidden');
+      document.getElementById('crop-progress-box').classList.add('hidden');
+      document.getElementById('crop-upload-container').style.display = 'block';
+      hideCropStatus();
     }
   </script>
 </body>
